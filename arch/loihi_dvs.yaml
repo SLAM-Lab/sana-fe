@@ -16,12 +16,16 @@ architecture:
       attributes:
         blocking: True
         #energy_spike_within_tile: 1.7e-12
-        latency_spike_within_tile: 2.1e-9
+        #latency_spike_within_tile: 2.1e-9
+        latency_spike_within_tile: 0.0e-9
         energy_spike_within_tile: 0.0e-12
         energy_east_west: 3.0e-12
-        latency_east_west: 4.1e-9
         energy_north_south: 4.2e-12
+        latency_east_west: 4.1e-9
         latency_north_south: 6.5e-9
+        #latency_east_west: 0.0e-9
+        #latency_north_south: 0.0e-9
+
       core:
         - name: loihi_core[0..3]
           attributes:
@@ -62,9 +66,10 @@ architecture:
                 weight_bits: 16
                 word_bits: 64
                 #energy_spike: 21.1e-12
-                energy_spike: 24.0e-12
+                energy_spike: 24.0e-12  # This is the most accurate, but why
                 #energy_spike: 32.0e-12
-                latency_spike: 4.0e-9
+                #latency_spike: 4.7e-9
+                latency_spike: 3.1e-9  # Latency for shared sparse weights
                 #energy_memory: 53.6e-12
                 energy_memory: 0.0
                 latency_memory: 0.0
@@ -84,5 +89,8 @@ architecture:
                 protocol: dest_axon
                 #energy: 40.8e-12
                 #energy: 76.8e-12
-                energy: 100.0e-12
-                latency: 7.6e-9
+                #energy: 100.0e-12
+                energy: 111.0e-12
+                #latency: 7.6e-9
+                #latency: 0.0e-9
+                latency: 5.1e-9

@@ -301,6 +301,7 @@ int sim_schedule_messages(const struct simulation *const sim,
 			assert(m.dest_tile != NULL);
 			m.hops = abs(m.src_tile->x - m.dest_tile->x);
 			m.hops += abs(m.src_tile->y - m.dest_tile->y);
+
 			TRACE1("\t(cid:%d.%d) Sending %d spikes to %d.%d\n",
 				c->t->id, c->id, m.dest_axon->connection_count,
 				m.dest_core->t->id, m.dest_core->id);
@@ -316,29 +317,34 @@ int sim_schedule_messages(const struct simulation *const sim,
 			//  message from being scheduled if the receiving h/w
 			//  is busy
 			m.blocked_latency = 0.0;
-			if (m.dest_core->is_blocking)
-			{
-				// Track how long the message is blocked for
-				m.blocked_latency = fmax(m.blocked_latency,
-					m.dest_core->blocked_until - c->time);
-				// Update the core global time, blocking until
-				//  the receiving core is free
-				c->time = fmax(
-					c->time, m.dest_core->blocked_until);
-			}
 			if (m.dest_tile->is_blocking)
 			{
 				m.blocked_latency = fmax(m.blocked_latency,
-					m.dest_core->blocked_until - c->time);
+					m.dest_tile->blocked_until - c->time);
 				// Update the core global time, blocking until
 				//  the receiving tile is free
 				c->time = fmax(
 					c->time, m.dest_tile->blocked_until);
 			}
-
-			// Calculate when the receiving h/w will be busy until
-			m.dest_tile->blocked_until =
-				c->time + m.dest_axon->network_latency;
+			if (m.dest_core->is_blocking)
+			{
+				// Track how long the message is blocked for
+				m.blocked_latency = fmax(m.blocked_latency,
+					m.dest_core->blocked_until - c->time);
+				// Calculate when the receiving h/w will be busy
+				//  until
+				if (c->time < m.dest_core->blocked_until)
+				{
+					// If we were trying to send a spike to
+					//  a blocked core, also block the tile
+					//  for this duration as well
+					m.dest_tile->blocked_until =
+						m.dest_core->blocked_until;
+					// Update the core global time, blocking
+					//  until the receiving core is free
+					c->time = m.dest_core->blocked_until;
+				}
+			}
 
 			c->time += m.dest_axon->network_latency;
 			if (m.dest_core->is_blocking)
@@ -698,10 +704,15 @@ double sim_update_synapse(struct timestep *const ts,
 
 		post_core->synapse.energy +=
 			spike_ops * post_core->synapse.energy_spike_op;
-		//latency += spike_ops * post_core->synapse.time_spike_op;
 		// TODO: generalize, number of parallel processing units
-		latency += floor(((double) spike_ops + 3.0) / 4.0) *
-			   (post_core->synapse.time_spike_op * 4.0);
+		if (spike_ops <= 4)
+		{
+			latency += 12.0e-9;
+		}
+
+		latency += floor(((double) spike_ops + 2.0) / 3.0) *
+				(post_core->synapse.time_spike_op * 3.0);
+
 		post_core->synapse.spikes_processed += spike_ops;
 		post_core->synapse.memory_reads += memory_accesses;
 
@@ -1244,7 +1255,8 @@ void sim_message_trace_write_header(const struct simulation *const sim)
 	fprintf(sim->message_trace_fp, "timestep,src_neuron,");
 	fprintf(sim->message_trace_fp, "src_hw,dest_hw,hops,spikes,");
 	fprintf(sim->message_trace_fp, "generation_latency,network_latency,");
-	fprintf(sim->message_trace_fp, "processing_latency,blocking_latency\n");
+	fprintf(sim->message_trace_fp, "processing_latency,blocking_latency,");
+	fprintf(sim->message_trace_fp, "src_x,src_y,dest_x,dest_y\n");
 }
 
 void sim_trace_record_spikes(
@@ -1344,7 +1356,13 @@ void sim_trace_record_message(
 	fprintf(sim->message_trace_fp, "%le,", m->generation_latency);
 	fprintf(sim->message_trace_fp, "%le,", m->network_latency);
 	fprintf(sim->message_trace_fp, "%le,", m->receive_latency);
-	fprintf(sim->message_trace_fp, "%le\n", m->blocked_latency);
+	fprintf(sim->message_trace_fp, "%le,", m->blocked_latency);
+
+	// Print details about the route the message took
+	fprintf(sim->message_trace_fp, "%d,", m->src_tile->x);
+	fprintf(sim->message_trace_fp, "%d,", m->src_tile->y);
+	fprintf(sim->message_trace_fp, "%d,", m->dest_tile->x);
+	fprintf(sim->message_trace_fp, "%d\n", m->dest_tile->y);
 
 	return;
 }

@@ -589,6 +589,7 @@ void arch_create_axon_out(struct core *const c, struct attributes *attr,
 void arch_create_connection_maps(struct architecture *const arch)
 {
 	TRACE1("Creating all connection maps.\n");
+	//#pragma omp parallel for
 	for (int i = 0; i < arch->tile_count; i++)
 	{
 		struct tile *t = &(arch->tiles[i]);

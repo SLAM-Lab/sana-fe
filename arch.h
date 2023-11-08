@@ -95,7 +95,7 @@ struct message
 	struct neuron *src_neuron;
 	double generation_latency, network_latency, receive_latency;
 	double blocked_latency;
-	int spikes, hops;
+	int spikes, hops, src_x, src_y, dest_x, dest_y;
 };
 
 struct connection_map

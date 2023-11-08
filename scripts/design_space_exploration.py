@@ -25,7 +25,7 @@ compartment_counts = (16384, 8192, 4096, 2048, 1024, 768, 512, 256)
 
 cores_per_tile = 4
 
-run_experiment = False
+run_experiment = True
 plot_results = True
 
 if run_experiment:

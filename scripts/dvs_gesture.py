@@ -89,7 +89,7 @@ def parse_loihi_spiketrains(total_timesteps):
     return spiketrain
 
 if __name__ == "__main__":
-    run_experiments = False
+    run_experiments = True
     plot_experiments = True
     experiment = "time"
     #experiment = "energy"
@@ -104,6 +104,7 @@ if __name__ == "__main__":
     energies = np.array(())
     timesteps = 128
     frames = 100
+    frame_increment = 1
     #frames = 1
 
     loihi_spiketrains = parse_loihi_spiketrains(timesteps)
@@ -132,7 +133,7 @@ if __name__ == "__main__":
         elif experiment == "time":
             open(SIM_TIME_DATA_PATH, "w")
 
-        for inputs in range(0, frames):
+        for inputs in range(0, frames, frame_increment):
             print(f"Running for input: {inputs}")
             # First create the network file from the inputs and SNN
             input_filename = os.path.join(NETWORK_DIR, f"inputs{inputs}.net")
@@ -187,16 +188,16 @@ if __name__ == "__main__":
             #  a 0 value. Just ignore the entries for both arrays (so we have
             #  timestep-1)
             times = np.delete(times,
-                            list(range(timesteps, timesteps*frames, timesteps)))
+                            list(range(timesteps, (timesteps*frames)//frame_increment, timesteps)))
             #loihi_times = np.delete(loihi_times,
             #                list(range(timesteps, timesteps*frames, timesteps)))
 
-            total_times = np.zeros(frames)
-            loihi_total_times = np.zeros(frames)
-            for i in range(0, frames):
+            total_times = np.zeros(frames // frame_increment)
+            loihi_total_times = np.zeros(frames // frame_increment)
+            for i in range(0, frames // frame_increment):
                 total_times[i] = np.sum(times[i*(timesteps-1):(i+1)*(timesteps-1)])
                 #loihi_total_times[i] = np.sum(loihi_times[i*(timesteps-1):(i+1)*(timesteps-1)])
-                loihi_total_times[i] = np.sum(loihi_times[0:timesteps, i])
+                loihi_total_times[i] = np.sum(loihi_times[0:timesteps, i*frame_increment])
 
             """
             plt.figure(figsize=(7, 8))
@@ -236,7 +237,7 @@ if __name__ == "__main__":
             loihi_data = pd.read_csv(LOIHI_TIME_DATA_PATH)
             loihi_times = np.array(loihi_data.loc[:, :] / 1.0e6)
             times = np.delete(times,
-                    list(range(timesteps-1, timesteps*frames, timesteps)))
+                    list(range(timesteps-1, timesteps*frames//frame_increment, timesteps)))
             loihi_times = loihi_times[0:timesteps-1,:]
             plt.figure(figsize=(7.0, 1.7))
 
