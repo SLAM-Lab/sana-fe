@@ -659,8 +659,8 @@ double sim_schedule_messages(struct message_fifo *const messages_sent,
 			TRACE1("Path capacity:%d messages:%lf delay:%e\n",
 				path_capacity, messages_along_route, network_delay);
 
-			earliest_received_time = m->sent_timestamp + fmax(
-				m->network_delay, network_delay);
+			earliest_received_time = m->sent_timestamp +
+				m->network_delay + network_delay;
 			m->received_timestamp = fmax(
 				noc.core_finished_receiving[dest_core],
 				earliest_received_time);
@@ -1177,14 +1177,22 @@ double sim_update_soma_lif(
 	// Add the synaptic / dendrite current to the potential
 	//printf("n->bias:%lf n->potential before:%lf current_in:%lf\n", n->bias, n->potential, current_in);
 	n->potential += current_in + n->bias;
-	n->charge = 0.0;
+	//n->charge = 0.0;
+
+	// HACK for dvs gesture, fix this if needed or for future!
+	//  With these hacks, DVS gesture has exact matches in spiking behavior
+	//  i.e., quantization is important for exactly replicating behavior
+	//n->charge *= (1.0 - (4095.0/4096.0));
+	n->charge *= 64.0;
+	// Quantize current
+	n->charge = (int) n->charge;
+	n->charge /= 64.0;
 	//printf("n->bias:%lf n->potential after:%lf\n", n->bias, n->potential);
 
 	TRACE1("Updating potential, after:%f\n", n->potential);
 
 	// Check against threshold potential (for spiking)
-	if (((n->bias != 0.0) && (n->potential > n->threshold)) ||
-		((n->bias == 0.0) && (n->potential >= n->threshold)))
+	if (n->potential > n->threshold)
 	{
 		if (n->group->reset_mode == NEURON_RESET_HARD)
 		{
