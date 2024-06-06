@@ -17,15 +17,13 @@ sanafe::CurrentBasedSynapseModel::CurrentBasedSynapseModel()
 }
 
 double sanafe::CurrentBasedSynapseModel::update(
-        const std::optional<int> synapse_address, const bool step)
+        const std::optional<int> synapse_address)
 {
-    if (step)
+
+    current *= synaptic_current_decay;
+    if (fabs(current) < min_synaptic_resolution)
     {
-        current *= synaptic_current_decay;
-        if (fabs(current) < min_synaptic_resolution)
-        {
-            current = 0.0;
-        }
+        current = 0.0;
     }
     if (synapse_address.has_value())
     {
@@ -64,18 +62,14 @@ sanafe::SingleCompartmentModel::SingleCompartmentModel()
 }
 
 double sanafe::SingleCompartmentModel::update(
-        const std::optional<double> current_in, const int compartment,
-        const bool step)
+        const std::vector<Synapse> synapses_in)
 {
-    if (step)
-    {
-        accumulated_charge *= leak_decay;
-        //INFO("accumulated:%e\n", accumulated_charge);
-    }
-    if (current_in.has_value())
+    accumulated_charge *= leak_decay;
+    //INFO("accumulated:%e\n", accumulated_charge);
+    for (const auto &synapse : synapses_in)
     {
         // Integrate any input current
-        accumulated_charge += current_in.value();
+        accumulated_charge += synapse.current;
     }
 
     return accumulated_charge;
@@ -105,39 +99,36 @@ sanafe::MultiTapModel::MultiTapModel()
     weights = std::vector<double>(default_taps * default_taps, 0.0);
 }
 
-double sanafe::MultiTapModel::update(const std::optional<double> current_in,
-        const int compartment, const bool step)
+double sanafe::MultiTapModel::update(const std::vector<Synapse> &synapses_in)
 {
-    if (step)
+
+    const size_t taps = tap_voltages.size();
+    // Avoid reallocating this temporary buffer every time
+    for (size_t t = 0; t < taps; t++)
     {
-        const size_t taps = tap_voltages.size();
-        // Avoid reallocating this temporary buffer every time
-        for (size_t t = 0; t < taps; t++)
-        {
-            next_voltages[t] = 0.0;
-        }
-        for (size_t src = 0; src < taps; src++)
-        {
-            for (size_t dest = 0; dest < taps; dest++)
-            {
-                const size_t taps = tap_voltages.size();
-                const size_t weight_idx = (src * taps) + dest;
-                next_voltages[dest] += tap_voltages[src] * weights[weight_idx];
-            }
-            INFO("Tap %lu potential:%lf\n", src, tap_voltages[src]);
-            //printf("%lf\t", tap_voltages[src]);
-        }
-        //printf("\n");
-        for (size_t t = 0; t < taps; t++)
-        {
-            tap_voltages[t] = next_voltages[t];
-        }
+        next_voltages[t] = 0.0;
     }
-    if (current_in.has_value())
+    for (size_t src = 0; src < taps; src++)
     {
-        assert(compartment >= 0);
-        assert((size_t) compartment < tap_voltages.size());
-        tap_voltages[compartment] += current_in.value();
+        for (size_t dest = 0; dest < taps; dest++)
+        {
+            const size_t taps = tap_voltages.size();
+            const size_t weight_idx = (src * taps) + dest;
+            next_voltages[dest] += tap_voltages[src] * weights[weight_idx];
+        }
+        INFO("Tap %lu potential:%lf\n", src, tap_voltages[src]);
+        //printf("%lf\t", tap_voltages[src]);
+    }
+    //printf("\n");
+    for (size_t t = 0; t < taps; t++)
+    {
+        tap_voltages[t] = next_voltages[t];
+    }
+    for (const auto &synapse : synapses_in)
+    {
+        assert(synapse.compartment >= 0);
+        assert((size_t) synapse.compartment < tap_voltages.size());
+        tap_voltages[synapse.compartment] += synpase_in.current;
     }
 
     // Return current for most proximal tap (which is always the first tap)
@@ -299,7 +290,7 @@ void sanafe::LoihiLifModel::set_attributes(
 }
 
 sanafe::NeuronStatus sanafe::LoihiLifModel::update(
-        const std::optional<double> current_in, const bool step)
+        const std::optional<double> current_in)
 {
     // Calculate the change in potential since the last update e.g.
     //  integate inputs and apply any potential leak
@@ -314,25 +305,24 @@ sanafe::NeuronStatus sanafe::LoihiLifModel::update(
         state = sanafe::UPDATED;
     }
 
-    if (step)
+
+    potential *= leak_decay;
+    // Add randomized noise to potential if enabled
+    /*
+    if (noise_type == NOISE_FILE_STREAM)
     {
-        potential *= leak_decay;
-        // Add randomized noise to potential if enabled
-        /*
-        if (noise_type == NOISE_FILE_STREAM)
-        {
-            // TODO: fix noise generation. This depends on which core
-            //  is simulating the neuron. So somehow the neuron can still
-            //  need information about which core it is executing on
-            double random_potential = sim_generate_noise(n);
-            n->potential += random_potential;
-        }
-        */
-        // Add the synaptic / dendrite current to the potential
-        TRACE1("bias:%lf potential before:%lf current_in:%lf\n", bias,
-                potential, current_in.value());
-        potential += bias;
+        // TODO: fix noise generation. This depends on which core
+        //  is simulating the neuron. So somehow the neuron can still
+        //  need information about which core it is executing on
+        double random_potential = sim_generate_noise(n);
+        n->potential += random_potential;
     }
+    */
+    // Add the synaptic / dendrite current to the potential
+    TRACE1("bias:%lf potential before:%lf current_in:%lf\n", bias,
+            potential, current_in.value());
+    potential += bias;
+
     if (current_in.has_value())
     {
         potential += current_in.value();
@@ -445,7 +435,7 @@ void sanafe::TrueNorthModel::set_attributes(
 }
 
 sanafe::NeuronStatus sanafe::TrueNorthModel::update(
-        const std::optional<double> current_in, const bool step)
+        const std::optional<double> current_in)
 {
     bool randomize_threshold;
     sanafe::NeuronStatus state = sanafe::IDLE;
@@ -456,32 +446,30 @@ sanafe::NeuronStatus sanafe::TrueNorthModel::update(
         // Neuron is turned on and potential write
         state = sanafe::UPDATED;
     }
-    if (step)
+
+    // Apply leak
+    if (leak_towards_zero)
     {
-        // Apply leak
-        if (leak_towards_zero)
+        // TODO: what happens if we're above zero but by less
+        //  than the leak amount (for convergent), will we
+        //  oscillate between the two? Does it matter
+        if (potential > 0.0)
         {
-            // TODO: what happens if we're above zero but by less
-            //  than the leak amount (for convergent), will we
-            //  oscillate between the two? Does it matter
-            if (potential > 0.0)
-            {
-                // TrueNorth uses additive leak
-                potential -= leak;
-            }
-            else if (potential < 0.0)
-            {
-                potential += leak;
-            }
-            // else equals zero, so no leak is applied
+            // TrueNorth uses additive leak
+            potential -= leak;
         }
-        else
+        else if (potential < 0.0)
         {
             potential += leak;
         }
-
-        potential += bias;
+        // else equals zero, so no leak is applied
     }
+    else
+    {
+        potential += leak;
+    }
+
+    potential += bias;
     if (current_in.has_value())
     {
         potential += current_in.value();

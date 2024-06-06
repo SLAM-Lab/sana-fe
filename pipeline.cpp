@@ -155,7 +155,7 @@ double sanafe::pipeline_process_synapse(Timestep &ts, Architecture &arch,
     //  lookup, read and accumulate the synaptic weights. Otherwise, just
     //  update filtered current and any other connection properties
     SIM_TRACE1("Updating synapses for (cid:%d)\n", c.id);
-    while (con.last_updated < ts.timestep)
+    while ((con.last_updated+1) < ts.timestep)
     {
         SIM_TRACE1("Updating synaptic current (last updated:%ld, ts:%ld)\n",
                 con.last_updated, ts.timestep);
@@ -183,7 +183,7 @@ double sanafe::pipeline_process_dendrite(
     double latency;
     latency = 0.0;
 
-    while (n.dendrite_last_updated < ts.timestep)
+    while ((n.dendrite_last_updated+1) < ts.timestep)
     {
         TRACE2("Updating nid:%d dendritic current "
                "(last_updated:%d, ts:%ld)\n",

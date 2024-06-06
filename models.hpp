@@ -13,6 +13,7 @@
 
 namespace sanafe
 {
+struct Synapse;
 enum NeuronStatus: int { IDLE, UPDATED, FIRED};
 enum NeuronResetModes
 {
@@ -28,7 +29,7 @@ class SynapseModel
 public:
     SynapseModel() {}
     virtual ~SynapseModel() {}
-    virtual double update(std::optional<int> synapse_address=std::nullopt, const bool step=true) = 0;
+    virtual double update(std::optional<int> synapse_address) = 0;
     // Set synapse attributes
     virtual void set_attributes(const std::map<std::string, std::string> &attr) = 0;
 };
@@ -40,7 +41,7 @@ public:
     virtual ~DendriteModel() {}
     // TODO: figure out how this model works... do we update each compartment?
     //virtual void input(const double current_in, const int compartment) = 0;
-    virtual double update(std::optional<double> current_in=std::nullopt, const int compartment=0,  const bool step=true) = 0;
+    virtual double update(const std::vector<Synapse> &synapses_in) = 0;
     // Set global dendritic attributes
     virtual void set_attributes(const std::map<std::string, std::string> &attr) = 0;
     // Set per-compartment attributes
@@ -54,7 +55,7 @@ class CurrentBasedSynapseModel: public SynapseModel
 public:
     CurrentBasedSynapseModel();
     ~CurrentBasedSynapseModel() {}
-    virtual double update(std::optional<int> synapse_address=std::nullopt,  const bool step=true);
+    virtual double update(std::optional<int> synapse_address=std::nullopt);
     virtual void set_attributes(const std::map<std::string, std::string> &attr);
 
 private:
@@ -67,7 +68,7 @@ class SingleCompartmentModel: public DendriteModel
 public:
     SingleCompartmentModel();
     ~SingleCompartmentModel() {}
-    virtual double update(std::optional<double> current_in=std::nullopt, const int compartment=0,  const bool step=true);
+    virtual double update(const std::vector<Synapse> &synapses_in);
     virtual void set_attributes(const std::map<std::string, std::string> &attr);
 private:
     double accumulated_charge, leak_decay;
@@ -77,7 +78,7 @@ class MultiTapModel: public DendriteModel
 {
 public:
     MultiTapModel();
-    virtual double update(std::optional<double> current_in=std::nullopt, const int compartment=0,  const bool step=true);
+    virtual double update(const std::vector<Synapse> &synapses_in);
     virtual void set_attributes(const std::map<std::string, std::string> &attr);
     virtual void set_attributes(const size_t compartment_id, const std::map<std::string, std::string> &attr);
     virtual void set_attributes(const size_t src_compartment_id, const size_t dest_compartment_id, const std::map<std::string, std::string> &attr);
@@ -94,7 +95,7 @@ class SomaModel
 public:
     SomaModel(const int gid, const int nid) : group_id(gid), neuron_id(nid) {}
     virtual ~SomaModel() {}
-    virtual NeuronStatus update(const std::optional<double> current_in=std::nullopt, const bool step=true) = 0;
+    virtual NeuronStatus update(const std::optional<double> synapses_in=std::nullopt) = 0;
     virtual void set_attributes(const std::map<std::string, std::string> &attr) = 0;
     virtual double get_potential() { return 0.0; }
 protected:
@@ -109,7 +110,7 @@ public:
     LoihiLifModel(const int gid, const int nid);
     ~LoihiLifModel() {}
     void set_attributes(const std::map<std::string, std::string> &attr);
-    NeuronStatus update(const std::optional<double> current_in,  const bool step=true);
+    NeuronStatus update(const std::optional<double> current_in);
     double get_potential() { return potential; }
 private:
     bool force_update;
@@ -125,7 +126,7 @@ public:
     TrueNorthModel(const int gid, const int nid);
     ~TrueNorthModel() {}
     void set_attributes(const std::map<std::string, std::string> &attr);
-    NeuronStatus update(const std::optional<double> current_in=std::nullopt,  const bool step=true);
+    NeuronStatus update(const std::optional<double> current_in=std::nullopt);
     double get_potential() { return potential; }
 private:
     bool force_update;
